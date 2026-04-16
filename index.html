@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+<title>Change Calculator</title>
+
+<!-- PWA -->
+<link rel="manifest" href="manifest.json">
+<script>
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("service-worker.js");
+  }
+</script>
+
+<style>
+  :root {
+    --bg: #ffffff;
+    --text: #000000;
+    --border: #000000;
+    --field-bg: #f0f0f0;
+    --btn-bg: #e0e0e0;
+    --btn-active: #c8c8c8;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #000000;
+      --text: #ffffff;
+      --border: #ffffff;
+      --field-bg: #1a1a1a;
+      --btn-bg: #2a2a2a;
+      --btn-active: #3a3a3a;
+    }
+  }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    overflow: hidden;
+    background: var(--bg);
+    color: var(--text);
+    font-family: system-ui, sans-serif;
+  }
+
+  .app {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    padding: 12px;
+    box-sizing: border-box;
+    gap: 10px;
+  }
+
+  h1 {
+    text-align: center;
+    margin: 0;
+    font-size: 1.4rem;
+    font-weight: 600;
+  }
+
+  .result {
+    text-align: center;
+    font-size: 1.6rem;
+    font-weight: 700;
+    min-height: 28px;
+  }
+
+  .section {
+    flex: 0 0 auto;
+  }
+
+  .label {
+    margin-bottom: 4px;
+    font-size: 1rem;
+    font-weight: 500;
+  }
+
+  .display {
+    width: 100%;
+    padding: 12px;
+    font-size: 1.6rem;
+    text-align: right;
+    border: 2px solid var(--border);
+    background: var(--field-bg);
+    box-sizing: border-box;
+  }
+
+  .display.active {
+    outline: 2px solid var(--text);
+  }
+
+  .small {
+    font-size: 0.8rem;
+    opacity: 0.7;
+    text-align: right;
+    margin-top: 2px;
+  }
+
+  .numpad {
+    flex: 1 1 0;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+
+  .btn {
+    font-size: 1.6rem;
+    border: 2px solid var(--border);
+    background: var(--btn-bg);
+    color: var(--text);
+    width: 100%;
+    height: 100%;
+  }
+
+  .btn:active {
+    background: var(--btn-active);
+  }
+
+  .bottom-buttons {
+    flex: 0 0 auto;
+    display: flex;
+  }
+
+  .btn-clear {
+    flex: 1;
+    font-size: 1.4rem;
+    border: 2px solid var(--border);
+    background: var(--btn-bg);
+    color: var(--text);
+  }
+
+  .btn-clear:active {
+    background: var(--btn-active);
+  }
+</style>
+</head>
+
+<body>
+<div class="app">
+
+  <h1>Change Calculator</h1>
+
+  <div id="result" class="result"></div>
+
+  <div class="section">
+    <div class="label">Amount Due</div>
+    <div id="amountDisplay" class="display">0.00 €</div>
+    <div id="amountRaw" class="small">Input: –</div>
+  </div>
+
+  <div class="section">
+    <div class="label">Cash Given</div>
+    <div id="cashDisplay" class="display">0.00 €</div>
+    <div id="cashRaw" class="small">Input: –</div>
+  </div>
+
+  <div class="numpad" id="numpad">
+    <button class="btn" data-key="1">1</button>
+    <button class="btn" data-key="2">2</button>
+    <button class="btn" data-key="3">3</button>
+    <button class="btn" data-key="4">4</button>
+    <button class="btn" data-key="5">5</button>
+    <button class="btn" data-key="6">6</button>
+    <button class="btn" data-key="7">7</button>
+    <button class="btn" data-key="8">8</button>
+    <button class="btn" data-key="9">9</button>
+    <button class="btn" data-key="C">C</button>
+    <button class="btn" data-key="0">0</button>
+    <button class="btn" data-key="←">←</button>
+  </div>
+
+  <div class="bottom-buttons">
+    <button id="resetBtn" class="btn-clear">Clear</button>
+  </div>
+
+</div>
+
+<script>
+  let rawAmount = "";
+  let rawCash = "";
+  let activeField = "amount";
+
+  const amountDisplay = document.getElementById("amountDisplay");
+  const cashDisplay = document.getElementById("cashDisplay");
+  const amountRaw = document.getElementById("amountRaw");
+  const cashRaw = document.getElementById("cashRaw");
+  const result = document.getElementById("result");
+
+  function format(raw) {
+    if (!raw) return "0.00 €";
+    const cents = parseInt(raw, 10);
+    const euros = Math.floor(cents / 100);
+    const centPart = (cents % 100).toString().padStart(2, "0");
+    return euros + "." + centPart + " €";
+  }
+
+  function updateDisplays() {
+    amountDisplay.textContent = format(rawAmount);
+    amountRaw.textContent = rawAmount ? "Input: " + rawAmount : "Input: –";
+
+    cashDisplay.textContent = format(rawCash);
+    cashRaw.textContent = rawCash ? "Input: " + rawCash : "Input: –";
+
+    calculate();
+  }
+
+  function calculate() {
+    const amount = parseInt(rawAmount || "0", 10) / 100;
+    const cash = parseInt(rawCash || "0", 10) / 100;
+
+    if (amount <= 0 || cash <= 0) {
+      result.textContent = "";
+      return;
+    }
+
+    const change = cash - amount;
+
+    if (change < 0) {
+      result.textContent = "Missing: " +
+        (-change).toLocaleString("en-US", { style: "currency", currency: "EUR" });
+    } else {
+      result.textContent = "Change: " +
+        change.toLocaleString("en-US", { style: "currency", currency: "EUR" });
+    }
+  }
+
+  amountDisplay.addEventListener("click", () => {
+    activeField = "amount";
+    amountDisplay.classList.add("active");
+    cashDisplay.classList.remove("active");
+  });
+
+  cashDisplay.addEventListener("click", () => {
+    activeField = "cash";
+    cashDisplay.classList.add("active");
+    amountDisplay.classList.remove("active");
+  });
+
+  amountDisplay.classList.add("active");
+
+  document.querySelectorAll("#numpad .btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const key = btn.dataset.key;
+      let target = activeField === "amount" ? rawAmount : rawCash;
+
+      if (key === "C") target = "";
+      else if (key === "←") target = target.slice(0, -1);
+      else if (target.length < 9) target += key;
+
+      if (activeField === "amount") rawAmount = target;
+      else rawCash = target;
+
+      updateDisplays();
+    });
+  });
+
+  document.getElementById("resetBtn").addEventListener("click", () => {
+    rawAmount = "";
+    rawCash = "";
+    result.textContent = "";
+    updateDisplays();
+  });
+
+  updateDisplays();
+</script>
+</body>
+</html>
